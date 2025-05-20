@@ -9,93 +9,91 @@ import pandas as pd
 import re
 
 def validate_vuln_id(vuln_id):
-    """Проверяет, что ID уязвимости соответствует формату ГГГГ-ЧЧЧ...Ч"""
-    pattern = r"^\d{4}-\d+$"  # 4 цифры года, дефис, любое количество цифр
+    '''Проверяет, что ID уязвимости соответствует формату'''
+    pattern = r'^\d{4}-\d+$'
     return bool(re.match(pattern, vuln_id))
 
 def increment_vuln_id(vuln_id):
-    """Увеличивает ID уязвимости на 1, сохраняя формат"""
+    '''Увеличивает ID уязвимости на 1, сохраняя формат'''
     year, number = vuln_id.split('-')
-    number = int(number) + 1
-    return f"{year}-{number}" # Возвращаем как строку без форматирования
+    number = str((int(number) + 1)).zfill(len(number))
+    return f'{year}-{number}'
 
 def main():
     setup_logging()
     logger = logging.getLogger(__name__)
 
     while True:
-        start_vuln_id = input("Введите начальный ID уязвимости в формате ГГГГ-ЧЧЧ...Ч (например, 2025-00000): ")
+        start_vuln_id = input('Введите начальный ID уязвимости (например, 2025-00000): ')
         if validate_vuln_id(start_vuln_id):
-            break #Выходим из цикла, если ввод корректен
+            break
         else:
-            print("Некорректный формат ID. Пожалуйста, введите в формате ГГГГ-ЧЧЧ...Ч.")
+            print('Некорректный формат ID. Попробуйте еще раз.')
 
-    # Базовый URL
     base_url = 'https://bdu.fstec.ru/vul/'
-
-
-    # Инициализация списка для хранения данных
     all_vuln_data = []
     vuln_id = start_vuln_id
-    url_exists = True  # Флаг для продолжения цикла
+    url_exists = True
 
     while url_exists:
+        url = f'{base_url}{vuln_id}'
+
         try:
-            url = base_url + vuln_id
-            logger.info(f"Starting parser for {url}")
+            logger.info(f'Processing URL: {url}')
 
             driver = EdgeHTMLParser(
                 user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0',
                 headless=True,
-                driver_path="drivers/msedgedriver.exe"
+                driver_path='drivers/msedgedriver.exe'
             )
 
             parser = VulnerabilityParser()
-
             html = driver.fetch_html(url)
-            logger.info("Page loaded successfully")
+            logger.info('Page loaded successfully')
 
-            vuln_data = parser.parse_vulnerability_data(html)
+            vuln_data = parser.parse_vulnerability_data(html, url)
 
-            # Проверка данных перед сохранением
-            if not vuln_data.empty:
-                logger.info("Parsed data:\n%s", vuln_data.to_string(index=False))
-                all_vuln_data.append(vuln_data)  # Добавляем DataFrame к общему списку
-                vuln_id = increment_vuln_id(vuln_id) #Используем функцию для увеличения ID
-            else:
-                logger.warning("No vulnerability data found for %s", url)
-                url_exists = False  # Прекращаем цикл, если данные не найдены
+            # Проверка флага остановки
+            if not vuln_data.empty and 'should_stop' in vuln_data.columns and vuln_data.iloc[0]['should_stop']:
+                logger.warning('Stop condition met. Ending processing.')
+                url_exists = False
+                break
+
+            if vuln_data.empty:
+                logger.warning('No valid vulnerability data found. Ending processing.')
+                url_exists = False
+                break
+
+            logger.info('Successfully parsed data:\n%s', vuln_data.drop(columns=['should_stop'], errors='ignore').to_string(index=False))
+            all_vuln_data.append(vuln_data.drop(columns=['should_stop'], errors='ignore'))
+            vuln_id = increment_vuln_id(vuln_id)
 
         except VulnParserError as e:
-            logger.error(f"Vulnerability parser error for {url}: {e}")
-            url_exists = False # Прекращаем цикл, если произошла ошибка при парсинге
+            logger.error(f'Vulnerability parser error: {e}')
+            url_exists = False
         except Exception as e:
-            logger.error(f"Unexpected error for {url}: {e}", exc_info=True)
-            url_exists = False  # Прекращаем цикл при любой ошибке
+            logger.error(f'Unexpected error: {e}', exc_info=True)
+            url_exists = False
         finally:
-            logger.info("Parser finished for URL: %s", url)
+            logger.info(f'Finished processing URL: {url}')
 
-    # Объединяем все DataFrame в один
     if all_vuln_data:
-        combined_df = pd.concat(all_vuln_data, ignore_index=True)  # Объединяем все DataFrame в один
-
-        # Проверка существования папки results
+        combined_df = pd.concat(all_vuln_data, ignore_index=True)
+        
         if not os.path.exists('results'):
             os.makedirs('results')
 
-        # Сохраняем объединенный DataFrame в один файл Excel
-        output_file_combined = f"results/vulnerability_combined_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        output_file = f'results/vulnerability_combined_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
         try:
             if not combined_df.empty:
-                logger.info(f"Saving combined results to {output_file_combined}")
-                combined_df.to_excel(output_file_combined, index=False)
-                logger.info(f"Combined results saved to {output_file_combined}")
+                combined_df.to_excel(output_file, index=False)
+                logger.info(f'Saved results to {output_file}')
             else:
-                logger.warning("No combined vulnerability data to save.")
+                logger.warning('No data to save - empty DataFrame')
         except Exception as e:
-            logger.error(f"Failed to save combined data to Excel: {e}", exc_info=True)
+            logger.error(f'Failed to save results: {e}')
     else:
-        logger.warning("No vulnerability data found for any URL in the range.")
+        logger.warning('No vulnerability data collected')
 
 if __name__ == '__main__':
     main()
