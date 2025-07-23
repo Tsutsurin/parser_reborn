@@ -1,19 +1,23 @@
 class VulnParserError(Exception):
-    """Base exception for vulnerability parser"""
+    '''Base exception for vulnerability parser'''
     pass
 
 class DriverNotFoundError(VulnParserError):
-    """Raised when web driver not found"""
+    '''Raised when web driver not found'''
     pass
 
 class PageLoadError(VulnParserError):
-    """Raised when page loading fails"""
+    '''Raised when page loading fails'''
+    pass
+
+class PageNotFoundError(VulnParserError):
+    '''Raised when page not found (404)'''
     pass
 
 class ParseError(VulnParserError):
-    """Raised when parsing fails"""
+    '''Raised when parsing fails'''
     pass
 
 class SaveToExcelError(VulnParserError):
-    """Raised when saving to Excel fails"""
+    '''Raised when saving to Excel fails'''
     pass
