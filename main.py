@@ -12,19 +12,19 @@ from src.vulnerability_parser import VulnerabilityParser
 from src.exceptions import VulnParserError, PageNotFoundError, PageLoadError
 
 def validate_vuln_id(vuln_id: str) -> bool:
-    """Проверяет формат ID уязвимости (например, 2025-00000)."""
+    '''Проверяет формат ID уязвимости (например, 2025-00000).'''
     pattern = r'^\d{4}-\d+$'
     return bool(re.match(pattern, vuln_id))
 
 def increment_vuln_id(vuln_id: str) -> str:
-    """Увеличивает ID уязвимости на единицу, сохраняя формат."""
+    '''Увеличивает ID уязвимости на единицу, сохраняя формат.'''
     year, number = vuln_id.split('-')
     number = str(int(number) + 1)
     original_length = len(vuln_id.split('-')[1])
     return f'{year}-{number.zfill(original_length)}'
 
 def get_driver_path() -> str:
-    """Возвращает путь к драйверу Edge."""
+    '''Возвращает путь к драйверу Edge.'''
     if getattr(sys, 'frozen', False):
         application_path = os.path.dirname(sys.executable)
     else:
@@ -33,7 +33,7 @@ def get_driver_path() -> str:
     return driver_path
 
 def setup_logging(enable_logs: bool) -> None:
-    """Настраивает конфигурацию логирования."""
+    '''Настраивает конфигурацию логирования.'''
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
@@ -52,7 +52,7 @@ def setup_logging(enable_logs: bool) -> None:
     logging.getLogger().setLevel(logging.INFO)
 
 def main() -> None:
-    """Основная функция для сбора данных об уязвимостях."""
+    '''Основная функция для сбора данных об уязвимостях.'''
     parser = argparse.ArgumentParser(description='Сбор данных об уязвимостях с веб-сайта')
     parser.add_argument('--logs', action='store_true', help='Включить логирование в файл')
     args = parser.parse_args()
@@ -72,12 +72,18 @@ def main() -> None:
     vuln_id = start_vuln_id
     
     # Инициализация парсера HTML
-    driver = EdgeHTMLParser(
-        user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0',
-        headless=True,
-        driver_path=get_driver_path()
-    )
-    
+    try:
+        driver = EdgeHTMLParser(
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0',
+            headless=True,
+            driver_path=get_driver_path()
+        )
+    except:
+        input('Edge драйвер не соответсвует текущей версии браузера.\n'
+              'Cкачайть драйвер можно на сайте https://developer.microsoft.com/en-us/microsoft-edge/tools/webdriver/?form=MA13LH \n'
+              'После распакуйте архив и поместите msedgedriver.exe в папку \'drivers\'.')
+        exit()
+
     # Подготовка директории и файла для пропущенных URL
     results_dir = os.path.join(os.path.dirname(get_driver_path()), '..', 'results')
     os.makedirs(results_dir, exist_ok=True)
@@ -104,7 +110,7 @@ def main() -> None:
                     else:
                         logger.error(f'Не удалось загрузить {url} после 3 попыток: {e}')
                         with open(missed_urls_file, 'a') as f:
-                            f.write(f"{url}\n")
+                            f.write(f'{url}\n')
                 except PageNotFoundError as e:
                     logger.info(f'Страница не найдена (404) для {url}: {e}. Завершаем обработку.')
                     continue_processing = False
@@ -135,7 +141,7 @@ def main() -> None:
         # Сохранение результатов
         if all_vuln_data:
             combined_df = pd.concat(all_vuln_data, ignore_index=True)
-            output_file = os.path.join(results_dir, f'vulnerability_combined_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx')
+            output_file = os.path.join(results_dir, f'vulnerability_combined_{datetime.now().strftime('%d%m%Y')}.xlsx')
             try:
                 if not combined_df.empty:
                     combined_df.to_excel(output_file, index=False)
@@ -152,3 +158,4 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
+    input('Для завершения нажмите Enter.')
