@@ -127,11 +127,18 @@ def main() -> None:
             try:
                 parser = VulnerabilityParser()
                 vuln_data = parser.parse_vulnerability_data(html, url)
+                
+                if vuln_data.empty or ('should_skip' in vuln_data.columns and vuln_data.iloc[0]['should_skip']):
+                    logger.info(f'Страница {url} зарезервирована.')
+                    with open(missed_urls_file, 'a') as f:
+                            f.write(f'{url}\n')
+
                 if vuln_data.empty or ('should_stop' in vuln_data.columns and vuln_data.iloc[0]['should_stop']):
-                    logger.info(f'Данные не найдены или выполнено условие остановки для {url}. Завершаем обработку.')
+                    logger.info(f'Выполнено условие остановки для {url}. Завершаем обработку.')
                     break
+
                 logger.info('Данные успешно извлечены:\n' + vuln_data.drop(columns=['should_stop'], errors='ignore').to_string(index=False))
-                all_vuln_data.append(vuln_data.drop(columns=['should_stop'], errors='ignore'))
+                all_vuln_data.append(vuln_data.drop(columns=['should_stop', 'should_skip'], errors='ignore'))
                 vuln_id = increment_vuln_id(vuln_id)
             except VulnParserError as e:
                 logger.error(f'Ошибка парсинга для {url}: {e}')
